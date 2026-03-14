@@ -1,0 +1,39 @@
+[package]
+name = "meriadoc"
+version = "0.1.0"
+edition = "2024"
+authors = ["Segundo Molina Abeniacar <segundo.molina.abeniacar@gmail.com>"]
+description = "A CLI tool for discovering, validating, and running tasks, jobs, and shells defined in project specification files, with built in MCP server capabilities."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/segunmo/meriadoc"
+homepage = "https://github.com/segunmo/meriadoc"
+readme = "README.md"
+keywords = ["cli", "task-runner", "devops", "shell", "ai-agents"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+anyhow = "1.0"
+thiserror = "2.0.17"
+clap = {version = "4.5.53", features = ["derive"]}
+dirs = "6.0.0"
+sha2 = "0.10"
+serde_json = "1.0"
+tempfile = "3.19"
+
+# HTTP Server
+tokio = { version = "1", features = ["full"] }
+axum = "0.7"
+tower = "0.4"
+tower-http = { version = "0.5", features = ["cors"] }
+
+# For embedded static files
+rust-embed = "8"
+mime_guess = "2"
+
+# For SSE streaming
+futures = "0.3"
+
+# Better RwLock
+parking_lot = "0.12"

@@ -1,0 +1,386 @@
+# Example Jobs for Meriadoc
+# Jobs compose multiple tasks into workflows
+
+version: v1
+
+tasks:
+  # ===========================================
+  # Developer Setup Tasks (used by jobs below)
+  # ===========================================
+
+  install-homebrew:
+    description: "Install Homebrew package manager"
+    cmds:
+      - echo "Checking for Homebrew..."
+      - command -v brew || /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      - echo "Homebrew installed!"
+    preconditions:
+      - cmds:
+          - "[ \"$(uname)\" = \"Darwin\" ]"
+        on_failure:
+          continue: false
+          cmds:
+            - echo "This task is for macOS only."
+
+  install-nvm:
+    description: "Install Node Version Manager"
+    cmds:
+      - echo "Installing NVM..."
+      - curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+      - echo "NVM installed! Restart your terminal or run 'source ~/.bashrc'"
+
+  install-node:
+    description: "Install Node.js LTS via NVM"
+    cmds:
+      - echo "Loading NVM..."
+      - export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+      - echo "Installing Node.js $NODE_VERSION..."
+      - nvm install $NODE_VERSION
+      - nvm alias default $NODE_VERSION
+      - echo "Node.js installed!"
+      - node --version
+      - npm --version
+    env:
+      NODE_VERSION:
+        type: string
+        default: "20"
+
+  install-python:
+    description: "Install Python via pyenv"
+    cmds:
+      - echo "Installing pyenv..."
+      - brew install pyenv
+      - echo "Installing Python $PYTHON_VERSION..."
+      - pyenv install $PYTHON_VERSION
+      - pyenv global $PYTHON_VERSION
+      - echo "Python installed!"
+      - python --version
+    env:
+      PYTHON_VERSION:
+        type: string
+        default: "3.12"
+
+  install-rust:
+    description: "Install Rust via rustup"
+    cmds:
+      - echo "Installing Rust..."
+      - curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+      - source $HOME/.cargo/env
+      - echo "Rust installed!"
+      - rustc --version
+      - cargo --version
+
+  install-docker:
+    description: "Install Docker Desktop"
+    cmds:
+      - echo "Installing Docker Desktop..."
+      - brew install --cask docker
+      - echo "Docker Desktop installed! Please open it to complete setup."
+
+  install-git-tools:
+    description: "Install Git and related tools"
+    cmds:
+      - echo "Installing Git tools..."
+      - brew install git gh git-lfs
+      - git lfs install
+      - echo "Git tools installed!"
+      - git --version
+      - gh --version
+
+  install-aws-cli:
+    description: "Install AWS CLI"
+    cmds:
+      - echo "Installing AWS CLI..."
+      - brew install awscli
+      - echo "AWS CLI installed!"
+      - aws --version
+
+  install-terraform:
+    description: "Install Terraform"
+    cmds:
+      - echo "Installing Terraform..."
+      - brew tap hashicorp/tap
+      - brew install hashicorp/tap/terraform
+      - echo "Terraform installed!"
+      - terraform --version
+
+  install-k8s-tools:
+    description: "Install Kubernetes tools"
+    cmds:
+      - echo "Installing Kubernetes tools..."
+      - brew install kubectl kubectx helm k9s
+      - echo "Kubernetes tools installed!"
+
+  install-editors:
+    description: "Install code editors"
+    cmds:
+      - echo "Installing VS Code..."
+      - brew install --cask visual-studio-code
+      - echo "Installing extensions..."
+      - code --install-extension ms-vscode.vscode-typescript-next
+      - code --install-extension esbenp.prettier-vscode
+      - code --install-extension dbaeumer.vscode-eslint
+      - code --install-extension rust-lang.rust-analyzer
+      - echo "Editors installed!"
+
+  configure-git:
+    description: "Configure Git with user details"
+    cmds:
+      - echo "Configuring Git..."
+      - git config --global user.name "$GIT_NAME"
+      - git config --global user.email "$GIT_EMAIL"
+      - git config --global init.defaultBranch main
+      - git config --global pull.rebase true
+      - echo "Git configured for $GIT_NAME <$GIT_EMAIL>"
+    env:
+      GIT_NAME:
+        type: string
+        required: true
+      GIT_EMAIL:
+        type: string
+        required: true
+
+  clone-repos:
+    description: "Clone team repositories"
+    cmds:
+      - echo "Cloning team repositories..."
+      - mkdir -p ~/work
+      - cd ~/work && gh repo clone $ORG/frontend || true
+      - cd ~/work && gh repo clone $ORG/backend || true
+      - cd ~/work && gh repo clone $ORG/infrastructure || true
+      - echo "Repositories cloned to ~/work"
+    env:
+      ORG:
+        type: string
+        default: "mycompany"
+
+  setup-ssh-keys:
+    description: "Generate SSH keys for GitHub"
+    cmds:
+      - echo "Generating SSH key..."
+      - ssh-keygen -t ed25519 -C "$GIT_EMAIL" -f ~/.ssh/id_ed25519 -N ""
+      - echo "Adding key to ssh-agent..."
+      - eval "$(ssh-agent -s)"
+      - ssh-add ~/.ssh/id_ed25519
+      - echo ""
+      - echo "Add this public key to GitHub:"
+      - cat ~/.ssh/id_ed25519.pub
+    env:
+      GIT_EMAIL:
+        type: string
+        required: true
+
+  # ===========================================
+  # CI/CD Tasks (used by jobs below)
+  # ===========================================
+
+  ci-lint:
+    description: "CI lint step"
+    cmds:
+      - npm ci
+      - npm run lint
+
+  ci-test:
+    description: "CI test step"
+    cmds:
+      - npm run test:ci
+
+  ci-build:
+    description: "CI build step"
+    cmds:
+      - npm run build
+
+  ci-deploy-staging:
+    description: "Deploy to staging"
+    cmds:
+      - echo "Deploying to staging..."
+      - aws s3 sync ./dist s3://$STAGING_BUCKET --delete
+      - aws cloudfront create-invalidation --distribution-id $STAGING_CF_ID --paths "/*"
+    env:
+      STAGING_BUCKET:
+        type: string
+        required: true
+      STAGING_CF_ID:
+        type: string
+        required: true
+
+  ci-deploy-prod:
+    description: "Deploy to production"
+    cmds:
+      - echo "Deploying to production..."
+      - aws s3 sync ./dist s3://$PROD_BUCKET --delete
+      - aws cloudfront create-invalidation --distribution-id $PROD_CF_ID --paths "/*"
+    env:
+      PROD_BUCKET:
+        type: string
+        required: true
+      PROD_CF_ID:
+        type: string
+        required: true
+
+jobs:
+  # ===========================================
+  # New Developer Onboarding
+  # ===========================================
+
+  new-joiner-setup:
+    description: "Complete development environment setup for new team members"
+    tasks:
+      - install-homebrew
+      - install-git-tools
+      - install-nvm
+      - install-node
+      - install-python
+      - install-rust
+      - install-docker
+      - install-aws-cli
+      - install-terraform
+      - install-k8s-tools
+      - install-editors
+    on_failure:
+      continue: true
+      cmds:
+        - echo "Some installations failed. Check the output above and re-run failed tasks individually."
+
+  new-joiner-config:
+    description: "Configure tools for new team member"
+    tasks:
+      - configure-git
+      - setup-ssh-keys
+      - clone-repos
+    env:
+      GIT_NAME:
+        type: string
+        required: true
+      GIT_EMAIL:
+        type: string
+        required: true
+
+  # ===========================================
+  # CI/CD Pipelines
+  # ===========================================
+
+  ci-pipeline:
+    description: "Full CI pipeline: lint, test, build"
+    tasks:
+      - ci-lint
+      - ci-test
+      - ci-build
+    on_failure:
+      continue: false
+      cmds:
+        - echo "CI pipeline failed. Check the logs above."
+
+  deploy-staging:
+    description: "Deploy to staging environment"
+    tasks:
+      - ci-lint
+      - ci-test
+      - ci-build
+      - ci-deploy-staging
+    agent:
+      risk_level: medium
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Staging deployment failed!"
+
+  deploy-production:
+    description: "Deploy to production environment"
+    tasks:
+      - ci-lint
+      - ci-test
+      - ci-build
+      - ci-deploy-prod
+    agent:
+      risk_level: high
+      requires_approval: true
+      confirmation: "This will deploy to PRODUCTION. All CI checks passed. Proceed?"
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Production deployment failed!"
+        - echo "Consider rolling back if the deployment was partial."
+
+  # ===========================================
+  # Database Operations
+  # ===========================================
+
+  db-refresh-dev:
+    description: "Refresh development database with latest schema and seed data"
+    tasks:
+      - db-reset
+      - db-migrate
+      - db-seed
+
+  # Placeholder tasks for the job above
+  db-reset:
+    description: "Reset database"
+    cmds:
+      - echo "Resetting database..."
+      - npx prisma migrate reset --force
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+
+  db-migrate:
+    description: "Run migrations"
+    cmds:
+      - npx prisma migrate deploy
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+
+  db-seed:
+    description: "Seed database"
+    cmds:
+      - npx prisma db seed
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+
+  # ===========================================
+  # Release Pipeline
+  # ===========================================
+
+  release-pipeline:
+    description: "Full release process"
+    tasks:
+      - version-bump
+      - changelog-generate
+      - release-tag
+      - release-publish
+
+  version-bump:
+    description: "Bump version number"
+    cmds:
+      - npm version $RELEASE_TYPE --no-git-tag-version
+    env:
+      RELEASE_TYPE:
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+  changelog-generate:
+    description: "Generate changelog"
+    cmds:
+      - npx conventional-changelog -p angular -i CHANGELOG.md -s
+
+  release-tag:
+    description: "Create git tag"
+    cmds:
+      - git add .
+      - git commit -m "chore(release): $(node -p \"require('./package.json').version\")"
+      - git tag v$(node -p "require('./package.json').version")
+
+  release-publish:
+    description: "Publish release"
+    cmds:
+      - git push origin main --tags
+      - npm publish

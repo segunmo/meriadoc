@@ -1,0 +1,425 @@
+# Example Shells for Meriadoc
+# Shells provide pre-configured interactive environments
+
+version: v1
+
+shells:
+  # ===========================================
+  # AWS Account Switching
+  # ===========================================
+
+  aws-dev:
+    description: "AWS shell for development account"
+    agent:
+      risk_level: low
+    env:
+      AWS_PROFILE:
+        type: string
+        default: "dev"
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+      AWS_ACCOUNT_ALIAS:
+        type: string
+        default: "development"
+      TF_WORKSPACE:
+        type: string
+        default: "dev"
+    init_cmds:
+      - aws sts get-caller-identity || (echo "Run 'aws sso login --profile dev' first" && exit 1)
+      - echo "Logged into AWS Development Account"
+      - echo "Account ID: $(aws sts get-caller-identity --query Account --output text)"
+      - echo "Region: $AWS_REGION"
+
+  aws-uat:
+    description: "AWS shell for UAT/staging account"
+    agent:
+      risk_level: medium
+    env:
+      AWS_PROFILE:
+        type: string
+        default: "uat"
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+      AWS_ACCOUNT_ALIAS:
+        type: string
+        default: "staging"
+      TF_WORKSPACE:
+        type: string
+        default: "uat"
+    init_cmds:
+      - aws sts get-caller-identity || (echo "Run 'aws sso login --profile uat' first" && exit 1)
+      - echo "Logged into AWS UAT Account"
+      - echo "Account ID: $(aws sts get-caller-identity --query Account --output text)"
+      - echo "Region: $AWS_REGION"
+      - echo ""
+      - echo "WARNING: This is the UAT environment. Changes may affect QA testing."
+
+  aws-prod:
+    description: "AWS shell for production account"
+    agent:
+      risk_level: high
+      requires_approval: true
+      confirmation: "You are about to access the PRODUCTION AWS account. Proceed with caution."
+    env:
+      AWS_PROFILE:
+        type: string
+        default: "prod"
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+      AWS_ACCOUNT_ALIAS:
+        type: string
+        default: "production"
+      TF_WORKSPACE:
+        type: string
+        default: "prod"
+    init_cmds:
+      - aws sts get-caller-identity || (echo "Run 'aws sso login --profile prod' first" && exit 1)
+      - echo ""
+      - echo "=============================================="
+      - echo "  PRODUCTION ENVIRONMENT - USE WITH CAUTION"
+      - echo "=============================================="
+      - echo ""
+      - echo "Account ID: $(aws sts get-caller-identity --query Account --output text)"
+      - echo "Region: $AWS_REGION"
+      - echo ""
+      - echo "Remember: All changes here affect real users!"
+
+  # ===========================================
+  # GitHub Account Switching
+  # ===========================================
+
+  gh-work:
+    description: "GitHub shell for work account"
+    env:
+      GH_HOST:
+        type: string
+        default: "github.com"
+      GIT_AUTHOR_EMAIL:
+        type: string
+        required: true
+      GIT_COMMITTER_EMAIL:
+        type: string
+        required: true
+      GIT_AUTHOR_NAME:
+        type: string
+        required: true
+      GIT_COMMITTER_NAME:
+        type: string
+        required: true
+    init_cmds:
+      - echo "Switching to work GitHub account..."
+      - gh auth status || gh auth login
+      - git config --global user.email "$GIT_AUTHOR_EMAIL"
+      - git config --global user.name "$GIT_AUTHOR_NAME"
+      - echo ""
+      - echo "GitHub Work Account Active"
+      - echo "User: $(gh api user --jq .login)"
+      - echo "Email: $GIT_AUTHOR_EMAIL"
+
+  gh-personal:
+    description: "GitHub shell for personal account"
+    env:
+      GH_HOST:
+        type: string
+        default: "github.com"
+      GIT_AUTHOR_EMAIL:
+        type: string
+        required: true
+      GIT_COMMITTER_EMAIL:
+        type: string
+        required: true
+      GIT_AUTHOR_NAME:
+        type: string
+        required: true
+      GIT_COMMITTER_NAME:
+        type: string
+        required: true
+    init_cmds:
+      - echo "Switching to personal GitHub account..."
+      - gh auth status || gh auth login
+      - git config --global user.email "$GIT_AUTHOR_EMAIL"
+      - git config --global user.name "$GIT_AUTHOR_NAME"
+      - echo ""
+      - echo "GitHub Personal Account Active"
+      - echo "User: $(gh api user --jq .login)"
+      - echo "Email: $GIT_AUTHOR_EMAIL"
+
+  # ===========================================
+  # Kubernetes Context Switching
+  # ===========================================
+
+  k8s-dev:
+    description: "Kubernetes shell for development cluster"
+    agent:
+      risk_level: low
+    env:
+      KUBECONFIG:
+        type: string
+        default: "~/.kube/config"
+      K8S_CONTEXT:
+        type: string
+        default: "dev-cluster"
+      K8S_NAMESPACE:
+        type: string
+        default: "default"
+    init_cmds:
+      - kubectl config use-context $K8S_CONTEXT
+      - kubectl config set-context --current --namespace=$K8S_NAMESPACE
+      - echo "Kubernetes Development Cluster"
+      - echo "Context: $K8S_CONTEXT"
+      - echo "Namespace: $K8S_NAMESPACE"
+      - echo ""
+      - kubectl cluster-info
+
+  k8s-prod:
+    description: "Kubernetes shell for production cluster"
+    agent:
+      risk_level: high
+      requires_approval: true
+      confirmation: "You are about to access the PRODUCTION Kubernetes cluster."
+    env:
+      KUBECONFIG:
+        type: string
+        default: "~/.kube/config"
+      K8S_CONTEXT:
+        type: string
+        default: "prod-cluster"
+      K8S_NAMESPACE:
+        type: string
+        default: "production"
+    init_cmds:
+      - kubectl config use-context $K8S_CONTEXT
+      - kubectl config set-context --current --namespace=$K8S_NAMESPACE
+      - echo ""
+      - echo "=============================================="
+      - echo "  PRODUCTION KUBERNETES - USE WITH CAUTION"
+      - echo "=============================================="
+      - echo ""
+      - echo "Context: $K8S_CONTEXT"
+      - echo "Namespace: $K8S_NAMESPACE"
+      - kubectl cluster-info
+
+  # ===========================================
+  # Docker Registry Shells
+  # ===========================================
+
+  docker-ecr:
+    description: "Shell authenticated to AWS ECR"
+    env:
+      AWS_PROFILE:
+        type: string
+        default: "default"
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+      AWS_ACCOUNT_ID:
+        type: string
+        required: true
+    init_cmds:
+      - echo "Authenticating with ECR..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo "Authenticated to ECR: $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
+      - echo ""
+      - echo "Available repositories:"
+      - aws ecr describe-repositories --query 'repositories[].repositoryName' --output table
+
+  docker-hub:
+    description: "Shell authenticated to Docker Hub"
+    env:
+      DOCKER_USERNAME:
+        type: string
+        required: true
+      DOCKER_TOKEN:
+        type: secret
+        required: true
+    init_cmds:
+      - echo "Authenticating with Docker Hub..."
+      - echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
+      - echo "Authenticated as $DOCKER_USERNAME"
+
+  # ===========================================
+  # Terraform Workspaces
+  # ===========================================
+
+  terraform-dev:
+    description: "Terraform shell for development infrastructure"
+    workdir: infrastructure
+    env:
+      TF_WORKSPACE:
+        type: string
+        default: "dev"
+      AWS_PROFILE:
+        type: string
+        default: "dev"
+      TF_VAR_environment:
+        type: string
+        default: "development"
+    init_cmds:
+      - terraform workspace select $TF_WORKSPACE || terraform workspace new $TF_WORKSPACE
+      - echo "Terraform Development Workspace"
+      - echo "Workspace: $(terraform workspace show)"
+      - echo "AWS Profile: $AWS_PROFILE"
+
+  terraform-prod:
+    description: "Terraform shell for production infrastructure"
+    workdir: infrastructure
+    env:
+      TF_WORKSPACE:
+        type: string
+        default: "prod"
+      AWS_PROFILE:
+        type: string
+        default: "prod"
+      TF_VAR_environment:
+        type: string
+        default: "production"
+    init_cmds:
+      - terraform workspace select $TF_WORKSPACE
+      - echo ""
+      - echo "=============================================="
+      - echo "  TERRAFORM PRODUCTION - PLAN BEFORE APPLY"
+      - echo "=============================================="
+      - echo ""
+      - echo "Workspace: $(terraform workspace show)"
+      - echo "AWS Profile: $AWS_PROFILE"
+      - echo ""
+      - echo "Always run 'terraform plan' before 'terraform apply'!"
+
+  # ===========================================
+  # Database Shells
+  # ===========================================
+
+  db-dev:
+    description: "Database shell for development"
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+      PGHOST:
+        type: string
+        default: "localhost"
+      PGPORT:
+        type: string
+        default: "5432"
+      PGDATABASE:
+        type: string
+        default: "myapp_dev"
+    init_cmds:
+      - echo "Development Database Shell"
+      - echo "Host: $PGHOST:$PGPORT"
+      - echo "Database: $PGDATABASE"
+      - echo ""
+      - echo "Useful commands:"
+      - echo "  psql                  - Connect to database"
+      - echo "  npm run db:migrate    - Run migrations"
+      - echo "  npm run db:seed       - Seed test data"
+
+  db-prod-readonly:
+    description: "Read-only production database shell"
+    agent:
+      risk_level: medium
+      requires_approval: true
+      confirmation: "Accessing production database in READ-ONLY mode."
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+      PGHOST:
+        type: string
+        required: true
+      PGPORT:
+        type: string
+        default: "5432"
+      PGDATABASE:
+        type: string
+        required: true
+      PGOPTIONS:
+        type: string
+        default: "-c default_transaction_read_only=on"
+    init_cmds:
+      - echo ""
+      - echo "=============================================="
+      - echo "  PRODUCTION DATABASE - READ ONLY MODE"
+      - echo "=============================================="
+      - echo ""
+      - echo "Host: $PGHOST:$PGPORT"
+      - echo "Database: $PGDATABASE"
+      - echo ""
+      - echo "This shell is configured for READ-ONLY access."
+      - echo "Write operations will be rejected."
+
+  # ===========================================
+  # Project-Specific Shells
+  # ===========================================
+
+  frontend-dev:
+    description: "Frontend development shell"
+    workdir: frontend
+    env:
+      NODE_ENV:
+        type: string
+        default: "development"
+      NEXT_PUBLIC_API_URL:
+        type: string
+        default: "http://localhost:3001"
+      PORT:
+        type: string
+        default: "3000"
+    init_cmds:
+      - echo "Frontend Development Shell"
+      - echo "Node $(node --version)"
+      - echo "API URL: $NEXT_PUBLIC_API_URL"
+      - echo ""
+      - echo "Run 'npm run dev' to start the dev server"
+
+  backend-dev:
+    description: "Backend development shell"
+    workdir: backend
+    env:
+      NODE_ENV:
+        type: string
+        default: "development"
+      PORT:
+        type: string
+        default: "3001"
+      DATABASE_URL:
+        type: string
+        default: "postgresql://localhost:5432/myapp_dev"
+      REDIS_URL:
+        type: string
+        default: "redis://localhost:6379"
+    init_cmds:
+      - echo "Backend Development Shell"
+      - echo "Node $(node --version)"
+      - echo "Port: $PORT"
+      - echo ""
+      - echo "Run 'npm run dev' to start the dev server"
+
+  # ===========================================
+  # Debugging Shells
+  # ===========================================
+
+  debug:
+    description: "Shell with debugging tools and verbose output"
+    env:
+      DEBUG:
+        type: string
+        default: "*"
+      NODE_DEBUG:
+        type: string
+        default: "http,net"
+      RUST_BACKTRACE:
+        type: string
+        default: "1"
+      RUST_LOG:
+        type: string
+        default: "debug"
+    init_cmds:
+      - echo "Debug Shell Active"
+      - echo "DEBUG=$DEBUG"
+      - echo "NODE_DEBUG=$NODE_DEBUG"
+      - echo "RUST_BACKTRACE=$RUST_BACKTRACE"
+      - echo "RUST_LOG=$RUST_LOG"

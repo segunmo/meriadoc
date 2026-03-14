@@ -1,0 +1,108 @@
+version: v1
+
+tasks:
+  build:
+    description: "Build the project (debug)"
+    cmds:
+      - cargo build
+
+  build-release:
+    description: "Build an optimized release binary"
+    cmds:
+      - cargo build --release
+
+  test:
+    description: "Run all tests"
+    cmds:
+      - cargo test
+
+  test-one:
+    description: "Run a single test by name or module path"
+    cmds:
+      - cargo test ${TEST_NAME}
+    env:
+      TEST_NAME:
+        type: string
+        required: true
+
+  lint:
+    description: "Run clippy with warnings as errors"
+    cmds:
+      - cargo clippy -- -D warnings
+
+  fmt:
+    description: "Format all code in place"
+    cmds:
+      - cargo fmt
+
+  fmt-check:
+    description: "Check formatting without modifying files"
+    cmds:
+      - cargo fmt --check
+
+  publish-dry-run:
+    description: "Verify the crate is publish-ready without uploading to crates.io"
+    agent:
+      enabled: false
+      risk_level: medium
+    cmds:
+      - cargo publish --dry-run
+
+  tag:
+    description: "Create an annotated git release tag (push manually to trigger release CI)"
+    agent:
+      enabled: false
+      risk_level: high
+    env:
+      VERSION:
+        type: string
+        required: true
+    preconditions:
+      - cmds:
+          - git diff --quiet HEAD
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Working tree has uncommitted changes — commit everything before tagging."
+    cmds:
+      - git tag -a v${VERSION} -m "Release v${VERSION}"
+      - 'echo "Tagged v${VERSION} — run: git push origin v${VERSION}"'
+
+jobs:
+  ci:
+    description: "Full CI pipeline: lint, format check, and test"
+    tasks:
+      - lint
+      - fmt-check
+      - test
+
+  release-check:
+    description: "Everything CI checks plus a release build and publish dry-run"
+    tasks:
+      - lint
+      - fmt-check
+      - test
+      - build-release
+      - publish-dry-run
+
+shells:
+  dev:
+    description: "Development shell with verbose logging and backtraces enabled"
+    env:
+      RUST_LOG:
+        type: choice
+        options:
+          - debug
+          - info
+          - warn
+          - error
+        default: debug
+      RUST_BACKTRACE:
+        type: choice
+        options:
+          - "0"
+          - "1"
+          - full
+        default: "1"
+    init_cmds:
+      - echo "Meriadoc dev shell ready — run 'meriadoc ls tasks' to see available tasks"

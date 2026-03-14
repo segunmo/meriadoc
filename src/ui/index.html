@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meriadoc</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="app">
+        <header>
+            <h1>Meriadoc</h1>
+            <span class="subtitle">Task Runner</span>
+        </header>
+        <main>
+            <section id="sidebar">
+                <div id="projects-section">
+                    <h2>Projects</h2>
+                    <ul id="project-list"></ul>
+                </div>
+                <div id="tasks-section">
+                    <h2>Tasks</h2>
+                    <div id="task-groups"></div>
+                </div>
+            </section>
+            <section id="output">
+                <h2>Output</h2>
+                <div class="output-header">
+                    <span id="current-task"></span>
+                    <button id="clear-btn" onclick="clearOutput()">Clear</button>
+                </div>
+                <pre id="console"></pre>
+            </section>
+        </main>
+    </div>
+
+    <!-- Environment Configuration Modal -->
+    <div id="env-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modal-title">Configure Environment</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <form id="env-form" onsubmit="submitEnvForm(event)">
+                <div id="env-fields"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Run Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Task Info Modal -->
+    <div id="info-modal" class="modal hidden">
+        <div class="modal-content modal-wide">
+            <div class="modal-header">
+                <h3 id="info-modal-title">Task Info</h3>
+                <button class="modal-close" onclick="closeInfoModal()">&times;</button>
+            </div>
+            <div id="info-modal-body"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeInfoModal()">Close</button>
+                <button type="button" class="btn-primary" id="info-run-btn">Run Task</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+# Example Tasks for Meriadoc
+# These demonstrate various task patterns and features
+
+version: v1
+
+tasks:
+  # ===========================================
+  # All Variable Types Demo
+  # ===========================================
+
+  all-types-demo:
+    description: "Demonstrates all environment variable types"
+    cmds:
+      - echo "String: $APP_NAME"
+      - echo "Number: $THRESHOLD"
+      - echo "Integer: $MAX_RETRIES"
+      - echo "Boolean: $VERBOSE"
+      - echo "Choice: $ENVIRONMENT"
+      - echo "Filepath: $CONFIG_PATH"
+      - echo "Secret: (hidden)"
+    env:
+      APP_NAME:
+        type: string
+        default: "my-app"
+      THRESHOLD:
+        type: number
+        default: "0.95"
+      MAX_RETRIES:
+        type: integer
+        default: "3"
+      VERBOSE:
+        type: boolean
+        default: "true"
+      ENVIRONMENT:
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      CONFIG_PATH:
+        type: filepath
+        default: "./config.yaml"
+      API_SECRET:
+        type: secret
+        required: true
+
+  # ===========================================
+  # Agent Annotation Examples
+  # ===========================================
+
+  safe-read-only:
+    description: "Safe task that only reads data (low risk)"
+    cmds:
+      - echo "Listing files..."
+      - ls -la
+      - echo "Checking git status..."
+      - git status
+    agent:
+      risk_level: low
+
+  build-with-approval:
+    description: "Build task that requires approval before running"
+    cmds:
+      - npm run build
+    agent:
+      risk_level: medium
+      requires_approval: true
+      confirmation: "This will rebuild the project. Proceed?"
+
+  deploy-dangerous:
+    description: "Production deployment (high risk, requires approval)"
+    cmds:
+      - echo "Deploying to production..."
+      - kubectl apply -f k8s/prod/
+      - kubectl rollout status deployment/myapp --timeout=300s
+    env:
+      K8S_CONTEXT:
+        type: string
+        required: true
+    agent:
+      risk_level: high
+      requires_approval: true
+      confirmation: "WARNING: This will deploy to PRODUCTION. Are you sure?"
+
+  db-drop-critical:
+    description: "Drop all tables (CRITICAL - destructive operation)"
+    cmds:
+      - echo "Dropping all tables in $DATABASE_NAME..."
+      - psql -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+    env:
+      DATABASE_NAME:
+        type: string
+        required: true
+      DATABASE_URL:
+        type: secret
+        required: true
+    agent:
+      risk_level: critical
+      requires_approval: true
+      confirmation: "DANGER: This will PERMANENTLY DELETE all data in $DATABASE_NAME. Type 'yes' to confirm."
+    preconditions:
+      - cmds:
+          - "[ \"$ENV\" != \"prod\" ]"
+        on_failure:
+          continue: false
+          cmds:
+            - echo "BLOCKED: Cannot drop production database!"
+
+  # ===========================================
+  # Environment Files Example
+  # ===========================================
+
+  with-env-files:
+    description: "Task that loads environment from files"
+    cmds:
+      - echo "API_URL=$API_URL"
+      - echo "DEBUG=$DEBUG"
+    env_files:
+      - .env
+      - .env.local
+    env:
+      DEBUG:
+        type: boolean
+        default: "false"
+
+  # ===========================================
+  # Code Quality Tasks
+  # ===========================================
+
+  lint:
+    description: "Run linters on the codebase"
+    cmds:
+      - echo "Running ESLint..."
+      - npx eslint src/ --fix
+      - echo "Running Prettier..."
+      - npx prettier --write "src/**/*.{ts,tsx,js,jsx}"
+    preconditions:
+      - cmds:
+          - test -f package.json
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Error: package.json not found. Are you in the project root?"
+
+  typecheck:
+    description: "Run TypeScript type checking"
+    cmds:
+      - npx tsc --noEmit
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Type checking failed. Fix the errors above before committing."
+
+  # ===========================================
+  # Docker & ECR Tasks
+  # ===========================================
+
+  docker-build:
+    description: "Build Docker image for the application"
+    cmds:
+      - echo "Building Docker image: $IMAGE_NAME:$IMAGE_TAG"
+      - docker build -t $IMAGE_NAME:$IMAGE_TAG -f Dockerfile .
+      - docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+    env:
+      IMAGE_NAME:
+        type: string
+        default: "myapp"
+      IMAGE_TAG:
+        type: string
+        default: "latest"
+
+  ecr-push:
+    description: "Build and push Docker image to AWS ECR"
+    cmds:
+      - echo "Authenticating with ECR in $AWS_REGION..."
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+      - echo "Building image..."
+      - docker build -t $ECR_REPO:$IMAGE_TAG .
+      - echo "Tagging for ECR..."
+      - docker tag $ECR_REPO:$IMAGE_TAG $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+      - echo "Pushing to ECR..."
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:$IMAGE_TAG
+      - echo "Successfully pushed $ECR_REPO:$IMAGE_TAG to ECR"
+    env:
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+      AWS_ACCOUNT_ID:
+        type: string
+        required: true
+      ECR_REPO:
+        type: string
+        required: true
+      IMAGE_TAG:
+        type: string
+        default: "latest"
+    preconditions:
+      - cmds:
+          - aws sts get-caller-identity
+        on_failure:
+          continue: false
+          cmds:
+            - echo "AWS credentials not configured. Run 'aws configure' or set AWS_PROFILE."
+      - cmds:
+          - test -f Dockerfile
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Dockerfile not found in current directory."
+
+  # ===========================================
+  # On-Failure Handler Examples
+  # ===========================================
+
+  deploy-with-rollback:
+    description: "Deploy with automatic rollback on failure"
+    cmds:
+      - echo "Saving current deployment state..."
+      - kubectl get deployment $DEPLOYMENT_NAME -o yaml > /tmp/rollback-$DEPLOYMENT_NAME.yaml
+      - echo "Applying new deployment..."
+      - kubectl apply -f k8s/deployment.yaml
+      - echo "Waiting for rollout..."
+      - kubectl rollout status deployment/$DEPLOYMENT_NAME --timeout=300s
+    env:
+      DEPLOYMENT_NAME:
+        type: string
+        default: "myapp"
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Deployment failed! Rolling back..."
+        - kubectl apply -f /tmp/rollback-$DEPLOYMENT_NAME.yaml
+        - kubectl rollout status deployment/$DEPLOYMENT_NAME --timeout=120s
+        - echo "Rollback complete. Please investigate the failure."
+
+  test-with-cleanup:
+    description: "Run tests with cleanup on failure"
+    cmds:
+      - echo "Starting test database..."
+      - docker-compose -f docker-compose.test.yaml up -d
+      - echo "Waiting for database..."
+      - sleep 5
+      - echo "Running tests..."
+      - npm test
+      - echo "Tests passed! Cleaning up..."
+      - docker-compose -f docker-compose.test.yaml down
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Tests failed. Cleaning up test environment..."
+        - docker-compose -f docker-compose.test.yaml down --volumes
+        - echo "Saving test logs..."
+        - docker-compose -f docker-compose.test.yaml logs > test-failure.log 2>&1 || true
+        - echo "Test logs saved to test-failure.log"
+
+  # ===========================================
+  # Database Migration Tasks
+  # ===========================================
+
+  db-migrate:
+    description: "Run database migrations for selected environment"
+    cmds:
+      - echo "Running migrations for $ENV environment..."
+      - echo "Using database: $DATABASE_URL"
+      - npx prisma migrate deploy
+      - echo "Migrations complete!"
+    env:
+      ENV:
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+        default: dev
+      DATABASE_URL:
+        type: string
+        required: true
+    preconditions:
+      - cmds:
+          - test -d prisma
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Prisma directory not found. Is this a Prisma project?"
+
+  db-seed:
+    description: "Seed database with test data (dev/uat only)"
+    cmds:
+      - echo "Seeding $ENV database..."
+      - npx prisma db seed
+    env:
+      ENV:
+        type: choice
+        options:
+          - dev
+          - uat
+        default: dev
+      DATABASE_URL:
+        type: string
+        required: true
+    preconditions:
+      - cmds:
+          - "[ \"$ENV\" != \"prod\" ]"
+        on_failure:
+          continue: false
+          cmds:
+            - echo "ERROR: Cannot seed production database!"
+
+  # ===========================================
+  # Release & Versioning Tasks
+  # ===========================================
+
+  release:
+    description: "Create a new release"
+    cmds:
+      - echo "Creating release $VERSION..."
+      - git tag -a v$VERSION -m "Release $VERSION"
+      - git push origin v$VERSION
+      - echo "Release v$VERSION created and pushed!"
+    env:
+      VERSION:
+        type: string
+        required: true
+    preconditions:
+      - cmds:
+          - git diff --quiet HEAD
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Working directory has uncommitted changes. Commit or stash them first."
+
+  changelog:
+    description: "Generate changelog from git commits"
+    cmds:
+      - echo "Generating changelog..."
+      - git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD > CHANGELOG.new.md
+      - cat CHANGELOG.new.md
+      - echo ""
+      - echo "Changelog saved to CHANGELOG.new.md"
+
+  # ===========================================
+  # Local Development Tasks
+  # ===========================================
+
+  dev-server:
+    description: "Start local development server"
+    cmds:
+      - echo "Starting development server on port $PORT..."
+      - npm run dev
+    env:
+      PORT:
+        type: string
+        default: "3000"
+      NODE_ENV:
+        type: string
+        default: "development"
+
+  dev-db:
+    description: "Start local development database"
+    cmds:
+      - echo "Starting PostgreSQL container..."
+      - docker run --rm -d --name dev-postgres -e POSTGRES_PASSWORD=$DB_PASSWORD -p 5432:5432 postgres:15
+      - echo "Database starting on localhost:5432"
+      - echo "Connection: postgresql://postgres:$DB_PASSWORD@localhost:5432/postgres"
+    env:
+      DB_PASSWORD:
+        type: string
+        default: "devpassword"

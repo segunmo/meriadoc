@@ -1,0 +1,520 @@
+# Complete Project Example
+# This shows how a real project might use Meriadoc
+# A typical Node.js/TypeScript web application
+
+version: v1
+
+tasks:
+  # ===========================================
+  # Development Tasks
+  # ===========================================
+
+  install:
+    description: "Install project dependencies"
+    cmds:
+      - npm ci
+    preconditions:
+      - cmds:
+          - test -f package.json
+        on_failure:
+          continue: false
+          cmds:
+            - echo "package.json not found. Are you in the project root?"
+
+  dev:
+    description: "Start development server"
+    cmds:
+      - npm run dev
+    env:
+      NODE_ENV:
+        type: string
+        default: "development"
+      PORT:
+        type: string
+        default: "3000"
+
+  build:
+    description: "Build for production"
+    cmds:
+      - npm run build
+    env:
+      NODE_ENV:
+        type: string
+        default: "production"
+
+  # ===========================================
+  # Code Quality
+  # ===========================================
+
+  lint:
+    description: "Run ESLint"
+    cmds:
+      - npm run lint
+
+  lint-fix:
+    description: "Run ESLint with auto-fix"
+    cmds:
+      - npm run lint -- --fix
+
+  format:
+    description: "Format code with Prettier"
+    cmds:
+      - npm run format
+
+  typecheck:
+    description: "Run TypeScript type checking"
+    cmds:
+      - npm run typecheck
+
+  check:
+    description: "Run all code quality checks"
+    cmds:
+      - npm run lint
+      - npm run typecheck
+      - npm run format -- --check
+
+  # ===========================================
+  # Testing
+  # ===========================================
+
+  test:
+    description: "Run unit tests"
+    cmds:
+      - npm test
+    env:
+      NODE_ENV:
+        type: string
+        default: "test"
+
+  test-watch:
+    description: "Run tests in watch mode"
+    cmds:
+      - npm test -- --watch
+
+  test-coverage:
+    description: "Run tests with coverage report"
+    cmds:
+      - npm test -- --coverage
+      - echo "Coverage report: coverage/lcov-report/index.html"
+
+  test-e2e:
+    description: "Run end-to-end tests"
+    cmds:
+      - npm run test:e2e
+    env:
+      BASE_URL:
+        type: string
+        default: "http://localhost:3000"
+    preconditions:
+      - cmds:
+          - curl -s $BASE_URL > /dev/null
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Server not running at $BASE_URL"
+            - echo "Start the dev server first with 'merry run task dev'"
+
+  # ===========================================
+  # Database
+  # ===========================================
+
+  db-migrate:
+    description: "Run database migrations"
+    cmds:
+      - echo "Running migrations for $ENV..."
+      - npx prisma migrate deploy
+      - echo "Migrations complete!"
+    env:
+      ENV:
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+        default: dev
+      DATABASE_URL:
+        type: secret
+        required: true
+    agent:
+      risk_level: medium
+      requires_approval: true
+      confirmation: "Running database migrations for $ENV. This modifies the database schema."
+
+  db-migrate-create:
+    description: "Create a new migration"
+    cmds:
+      - npx prisma migrate dev --name $MIGRATION_NAME
+    env:
+      MIGRATION_NAME:
+        type: string
+        required: true
+      DATABASE_URL:
+        type: string
+        required: true
+
+  db-seed:
+    description: "Seed database with test data"
+    cmds:
+      - npx prisma db seed
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+    preconditions:
+      - cmds:
+          - "[ \"$ENV\" != \"prod\" ]"
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Cannot seed production database!"
+
+  db-reset:
+    description: "Reset database (DESTRUCTIVE)"
+    cmds:
+      - echo "Resetting database..."
+      - npx prisma migrate reset --force
+    env:
+      DATABASE_URL:
+        type: secret
+        required: true
+    agent:
+      risk_level: critical
+      requires_approval: true
+      confirmation: "WARNING: This will DELETE ALL DATA and reset the database schema!"
+    preconditions:
+      - cmds:
+          - "[ \"$ENV\" != \"prod\" ]"
+        on_failure:
+          continue: false
+          cmds:
+            - echo "Cannot reset production database!"
+
+  db-studio:
+    description: "Open Prisma Studio"
+    cmds:
+      - npx prisma studio
+    env:
+      DATABASE_URL:
+        type: string
+        required: true
+
+  # ===========================================
+  # Docker
+  # ===========================================
+
+  docker-build:
+    description: "Build Docker image"
+    cmds:
+      - docker build -t $IMAGE_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_NAME:$IMAGE_TAG $IMAGE_NAME:latest
+    env:
+      IMAGE_NAME:
+        type: string
+        default: "myapp"
+      IMAGE_TAG:
+        type: string
+        default: "dev"
+
+  docker-run:
+    description: "Run Docker container locally"
+    cmds:
+      - docker run --rm -p $PORT:$PORT --env-file .env $IMAGE_NAME:$IMAGE_TAG
+    env:
+      IMAGE_NAME:
+        type: string
+        default: "myapp"
+      IMAGE_TAG:
+        type: string
+        default: "dev"
+      PORT:
+        type: string
+        default: "3000"
+
+  docker-push:
+    description: "Push Docker image to ECR"
+    cmds:
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+      - docker tag $IMAGE_NAME:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+      - docker push $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG
+      - echo "Pushed $ECR_REGISTRY/$ECR_REPO:$IMAGE_TAG"
+    env:
+      IMAGE_NAME:
+        type: string
+        default: "myapp"
+      IMAGE_TAG:
+        type: string
+        required: true
+      ECR_REGISTRY:
+        type: string
+        required: true
+      ECR_REPO:
+        type: string
+        required: true
+      AWS_REGION:
+        type: string
+        default: "us-east-1"
+    preconditions:
+      - cmds:
+          - aws sts get-caller-identity
+        on_failure:
+          continue: false
+          cmds:
+            - echo "AWS credentials not configured"
+
+  # ===========================================
+  # Deployment
+  # ===========================================
+
+  deploy:
+    description: "Deploy to selected environment"
+    cmds:
+      - echo "Deploying to $ENV..."
+      - kubectl config use-context $K8S_CONTEXT
+      - kubectl apply -f k8s/$ENV/
+      - kubectl rollout status deployment/myapp -n $K8S_NAMESPACE --timeout=300s
+      - echo "Deployment complete!"
+    env:
+      ENV:
+        type: choice
+        options:
+          - dev
+          - uat
+          - prod
+        default: dev
+      K8S_CONTEXT:
+        type: string
+        required: true
+      K8S_NAMESPACE:
+        type: string
+        required: true
+    agent:
+      risk_level: high
+      requires_approval: true
+      confirmation: "Deploying to $ENV environment. This will update running services."
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Deployment failed! Checking pod status..."
+        - kubectl get pods -n $K8S_NAMESPACE -l app=myapp
+        - kubectl describe pods -n $K8S_NAMESPACE -l app=myapp | tail -50
+
+  # ===========================================
+  # Utilities
+  # ===========================================
+
+  clean:
+    description: "Clean build artifacts"
+    cmds:
+      - rm -rf dist node_modules/.cache .next .turbo coverage
+      - echo "Cleaned!"
+
+  clean-all:
+    description: "Clean everything including node_modules"
+    cmds:
+      - rm -rf dist node_modules .next .turbo coverage
+      - echo "Cleaned! Run 'merry run task install' to reinstall dependencies"
+
+  logs:
+    description: "Tail application logs"
+    cmds:
+      - kubectl logs -f deployment/myapp -n $K8S_NAMESPACE --tail=100
+    env:
+      K8S_NAMESPACE:
+        type: string
+        default: "default"
+
+  secret-generate:
+    description: "Generate a random secret"
+    cmds:
+      - openssl rand -base64 32
+
+jobs:
+  # ===========================================
+  # Development Workflows
+  # ===========================================
+
+  setup:
+    description: "Initial project setup"
+    tasks:
+      - install
+      - db-migrate
+      - db-seed
+
+  ci:
+    description: "Full CI pipeline"
+    tasks:
+      - install
+      - check
+      - test
+      - build
+    on_failure:
+      continue: false
+      cmds:
+        - echo "CI failed! Check the logs above."
+
+  pre-commit:
+    description: "Run before committing"
+    tasks:
+      - lint-fix
+      - format
+      - typecheck
+      - test
+
+  # ===========================================
+  # Deployment Pipelines
+  # ===========================================
+
+  deploy-dev:
+    description: "Build and deploy to development"
+    tasks:
+      - check
+      - test
+      - docker-build
+      - docker-push
+      - deploy
+    env:
+      ENV:
+        type: string
+        default: "dev"
+
+  deploy-prod:
+    description: "Build and deploy to production"
+    tasks:
+      - check
+      - test
+      - test-e2e
+      - docker-build
+      - docker-push
+      - deploy
+    env:
+      ENV:
+        type: string
+        default: "prod"
+    agent:
+      risk_level: critical
+      requires_approval: true
+      confirmation: "PRODUCTION DEPLOYMENT: All tests passed. This will affect real users. Proceed?"
+    on_failure:
+      continue: false
+      cmds:
+        - echo "Production deployment failed!"
+        - echo "Check the logs and consider rolling back."
+
+  # ===========================================
+  # Database Workflows
+  # ===========================================
+
+  db-refresh:
+    description: "Reset and reseed development database"
+    tasks:
+      - db-reset
+      - db-migrate
+      - db-seed
+    env:
+      ENV:
+        type: string
+        default: "dev"
+
+shells:
+  # ===========================================
+  # Development Shells
+  # ===========================================
+
+  dev:
+    description: "Development environment"
+    env:
+      NODE_ENV:
+        type: string
+        default: "development"
+      DATABASE_URL:
+        type: string
+        default: "postgresql://localhost:5432/myapp_dev"
+      REDIS_URL:
+        type: string
+        default: "redis://localhost:6379"
+      PORT:
+        type: string
+        default: "3000"
+    init_cmds:
+      - echo "Development Shell"
+      - echo "Node $(node --version)"
+      - echo ""
+      - echo "Quick commands:"
+      - echo "  merry run task dev      - Start dev server"
+      - echo "  merry run task test     - Run tests"
+      - echo "  merry run job setup     - Initial setup"
+
+  # ===========================================
+  # Environment Shells
+  # ===========================================
+
+  staging:
+    description: "UAT/Staging environment"
+    env:
+      NODE_ENV:
+        type: string
+        default: "staging"
+      K8S_CONTEXT:
+        type: string
+        default: "staging-cluster"
+      K8S_NAMESPACE:
+        type: string
+        default: "staging"
+      AWS_PROFILE:
+        type: string
+        default: "staging"
+    init_cmds:
+      - kubectl config use-context $K8S_CONTEXT
+      - aws sts get-caller-identity
+      - echo ""
+      - echo "Staging Environment Active"
+      - echo "Kubernetes: $K8S_CONTEXT"
+      - echo "AWS Profile: $AWS_PROFILE"
+
+  production:
+    description: "Production environment (use with caution)"
+    env:
+      NODE_ENV:
+        type: string
+        default: "production"
+      K8S_CONTEXT:
+        type: string
+        default: "prod-cluster"
+      K8S_NAMESPACE:
+        type: string
+        default: "production"
+      AWS_PROFILE:
+        type: string
+        default: "production"
+    init_cmds:
+      - kubectl config use-context $K8S_CONTEXT
+      - aws sts get-caller-identity
+      - echo ""
+      - echo "========================================="
+      - echo "  PRODUCTION ENVIRONMENT"
+      - echo "  All changes affect real users!"
+      - echo "========================================="
+      - echo ""
+      - echo "Kubernetes: $K8S_CONTEXT"
+      - echo "AWS Profile: $AWS_PROFILE"
+
+  # ===========================================
+  # Debugging
+  # ===========================================
+
+  debug:
+    description: "Shell with debug settings"
+    env:
+      NODE_ENV:
+        type: string
+        default: "development"
+      DEBUG:
+        type: string
+        default: "app:*"
+      LOG_LEVEL:
+        type: string
+        default: "debug"
+    init_cmds:
+      - echo "Debug mode enabled"
+      - echo "DEBUG=$DEBUG"
+      - echo "LOG_LEVEL=$LOG_LEVEL"
