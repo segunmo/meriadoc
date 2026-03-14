@@ -406,25 +406,7 @@ tasks:
 
 ## Examples
 
-<!-- TODO: Add screenshots and videos -->
-
-### Web UI
-
-*Screenshot: Projects and tasks panel*
-
-*Screenshot: Task info modal*
-
-*Screenshot: Run modal with typed inputs*
-
-### CLI
-
-*Demo: Running a task with dry-run*
-
-*Demo: Interactive environment prompts*
-
-### MCP Integration
-
-*Demo: Claude using Meriadoc tasks*
+Demo recordings coming soon.
 
 ---
 
@@ -451,6 +433,49 @@ cache:
 
 ---
 
+## Installation
+
+### Cargo
+
+```bash
+cargo install meriadoc
+```
+
+Homebrew, prebuilt binaries, and a one-line install script are coming soon.
+
+---
+
+## Shell Completions
+
+Generate and install completions for your shell. Homebrew users get this automatically.
+
+**zsh**
+```bash
+mkdir -p ~/.zfunc
+meriadoc completions zsh > ~/.zfunc/_meriadoc
+```
+Add to `~/.zshrc` if not already present:
+```zsh
+fpath+=~/.zfunc && autoload -Uz compinit && compinit
+```
+
+**bash**
+```bash
+meriadoc completions bash > ~/.local/share/bash-completion/completions/meriadoc
+```
+
+**fish**
+```bash
+meriadoc completions fish > ~/.config/fish/completions/meriadoc.fish
+```
+
+**PowerShell**
+```powershell
+meriadoc completions powershell >> $PROFILE
+```
+
+---
+
 ## License
 
-MIT
+MIT OR Apache-2.0
