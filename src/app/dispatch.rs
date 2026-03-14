@@ -1,5 +1,8 @@
 //! Command dispatch - routes CLI commands to their handlers.
 
+use clap::CommandFactory;
+use clap_complete::generate;
+
 use crate::app::App;
 use crate::app::commands::{
     handle_cache, handle_config, handle_doctor, handle_env, handle_info, handle_ls, handle_run,
@@ -37,6 +40,11 @@ pub fn dispatch(cli: Cli, mut app: App) -> Result<(), MeriadocError> {
         Commands::Validate { target } => handle_validate(target, &app),
 
         Commands::Env { command } => handle_env(command, &app, json),
+
+        Commands::Completions { shell } => {
+            generate(shell, &mut Cli::command(), "meriadoc", &mut std::io::stdout());
+            Ok(())
+        }
 
         Commands::Serve => handle_serve(app),
 

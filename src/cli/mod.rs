@@ -7,6 +7,7 @@ pub mod prompt;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand, ValueEnum};
+use clap_complete::Shell;
 
 pub use options::{InteractiveMode, RunOptions};
 pub use prompt::{CliPrompter, EditableVar, EnvPrompter};
@@ -113,6 +114,12 @@ pub enum Commands {
         /// Port to listen on
         #[arg(short, long, default_value = "8420")]
         port: u16,
+    },
+
+    /// Print shell completion script to stdout
+    Completions {
+        /// Shell to generate completions for
+        shell: Shell,
     },
 }
 
