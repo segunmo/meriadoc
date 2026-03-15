@@ -145,8 +145,8 @@ jobs:
       - name: Compute hashes
         id: hashes
         run: |
-          ARM=$(grep "aarch64-apple-darwin" dist/*.sha256 | awk '{print $1}')
-          X86=$(grep "x86_64-apple-darwin" dist/*.sha256 | awk '{print $1}')
+          ARM=$(grep -h "aarch64-apple-darwin" dist/*.sha256 | awk '{print $1}')
+          X86=$(grep -h "x86_64-apple-darwin" dist/*.sha256 | awk '{print $1}')
           echo "arm_sha=${ARM}" >> $GITHUB_OUTPUT
           echo "x86_sha=${X86}" >> $GITHUB_OUTPUT
 
