@@ -10,6 +10,7 @@ homepage = "https://github.com/segunmo/meriadoc"
 readme = "README.md"
 keywords = ["cli", "task-runner", "devops", "shell", "ai-agents"]
 categories = ["command-line-utilities", "development-tools"]
+exclude = ["assets/", "docs/", ".github/"]
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
