@@ -4,6 +4,8 @@ A task runner designed for both humans and AI agents. Define tasks, jobs, and sh
 
 Meriadoc consolidates operational knowledge that typically scatters across READMEs, CI files, and tribal memory into explicit, discoverable, and validated spec files.
 
+![Demo](assets/demo.gif)
+
 ## Features
 
 - **Tasks**: Sequential shell commands with environment variables, working directory, and preconditions
@@ -95,6 +97,10 @@ The web UI provides:
 - Run modal with typed input fields for environment variables
 - Dry-run option to preview commands without executing
 - Real-time output console
+
+| Tasks panel | Task info | Run modal | Output |
+|---|---|---|---|
+| ![Tasks panel](assets/meriadoc-task-panel.png) | ![Task info modal](assets/meriadoc-task-info-modal.png) | ![Run modal](assets/meriadoc-task-run-modal.png) | ![Task finished](assets/meriadoc-task-finished.png) |
 
 ### CLI Reference
 
@@ -404,11 +410,6 @@ tasks:
 
 ---
 
-## Examples
-
-Demo recordings coming soon.
-
----
 
 ## Configuration
 
