@@ -1,0 +1,198 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            cross: true
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get install -y musl-tools
+
+      - name: Install cross
+        if: matrix.cross == true
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cross
+
+      - name: Build
+        if: matrix.cross != true
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (cross)
+        if: matrix.cross == true
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ARCHIVE="meriadoc-${VERSION}-${{ matrix.target }}"
+          mkdir -p "dist/${ARCHIVE}"
+          cp "target/${{ matrix.target }}/release/meriadoc" "dist/${ARCHIVE}/"
+          cp LICENSE LICENSE-APACHE README.md CHANGELOG.md "dist/${ARCHIVE}/"
+          cd dist
+          tar czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
+          sha256sum "${ARCHIVE}.tar.gz" > "${ARCHIVE}.tar.gz.sha256"
+
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $VERSION = $env:GITHUB_REF_NAME
+          $ARCHIVE = "meriadoc-${VERSION}-${{ matrix.target }}"
+          New-Item -ItemType Directory -Path "dist/${ARCHIVE}" -Force
+          Copy-Item "target/${{ matrix.target }}/release/meriadoc.exe" "dist/${ARCHIVE}/"
+          Copy-Item "LICENSE", "LICENSE-APACHE", "README.md", "CHANGELOG.md" "dist/${ARCHIVE}/"
+          Compress-Archive -Path "dist/${ARCHIVE}" -DestinationPath "dist/${ARCHIVE}.zip"
+          $hash = (Get-FileHash "dist/${ARCHIVE}.zip" -Algorithm SHA256).Hash.ToLower()
+          "${hash}  ${ARCHIVE}.zip" | Out-File -FilePath "dist/${ARCHIVE}.zip.sha256" -Encoding utf8
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.target }}
+          path: dist/
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*
+          path: dist
+          merge-multiple: true
+
+      - name: Create checksums.txt
+        run: |
+          cd dist
+          cat *.sha256 | sort > checksums.txt
+          cat checksums.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/checksums.txt
+          generate_release_notes: true
+
+  update-homebrew:
+    name: Update Homebrew formula
+    needs: release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: binary-*apple-darwin
+          path: dist
+          merge-multiple: true
+
+      - name: Compute hashes
+        id: hashes
+        run: |
+          ARM=$(grep "aarch64-apple-darwin" dist/*.sha256 | awk '{print $1}')
+          X86=$(grep "x86_64-apple-darwin" dist/*.sha256 | awk '{print $1}')
+          echo "arm_sha=${ARM}" >> $GITHUB_OUTPUT
+          echo "x86_sha=${X86}" >> $GITHUB_OUTPUT
+
+      - name: Checkout homebrew tap
+        uses: actions/checkout@v4
+        with:
+          repository: segunmo/homebrew-meriadoc
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+
+      - name: Update formula
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+          ARM_SHA: ${{ steps.hashes.outputs.arm_sha }}
+          X86_SHA: ${{ steps.hashes.outputs.x86_sha }}
+        run: |
+          cat > homebrew-tap/Formula/meriadoc.rb << EOF
+          class Meriadoc < Formula
+            desc "Discover, validate, and run tasks, jobs, and shells from project spec files"
+            homepage "https://github.com/segunmo/meriadoc"
+            version "${VERSION#v}"
+            license "MIT OR Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.arm?
+                url "https://github.com/segunmo/meriadoc/releases/download/${VERSION}/meriadoc-${VERSION}-aarch64-apple-darwin.tar.gz"
+                sha256 "${ARM_SHA}"
+              else
+                url "https://github.com/segunmo/meriadoc/releases/download/${VERSION}/meriadoc-${VERSION}-x86_64-apple-darwin.tar.gz"
+                sha256 "${X86_SHA}"
+              end
+            end
+
+            def install
+              bin.install "meriadoc"
+              generate_completions_from_executable(bin/"meriadoc", "completions")
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/meriadoc --version")
+            end
+          end
+          EOF
+
+      - name: Commit and push formula
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/meriadoc.rb
+          git commit -m "meriadoc ${{ needs.release.outputs.version }}"
+          git push

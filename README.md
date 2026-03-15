@@ -436,13 +436,34 @@ cache:
 
 ## Installation
 
+### Homebrew (macOS)
+
+```bash
+brew tap segunmo/meriadoc
+brew install meriadoc
+```
+
+### One-line install script (macOS and Linux)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/segunmo/meriadoc/main/install.sh | sh
+```
+
+Installs to `~/.local/bin`. To pin a specific version:
+
+```bash
+VERSION=v0.1.0 curl -fsSL https://raw.githubusercontent.com/segunmo/meriadoc/main/install.sh | sh
+```
+
 ### Cargo
 
 ```bash
 cargo install meriadoc
 ```
 
-Homebrew, prebuilt binaries, and a one-line install script are coming soon.
+### Prebuilt binaries
+
+Download from [GitHub Releases](https://github.com/segunmo/meriadoc/releases) for Linux (gnu, musl), macOS (arm64, x86_64), and Windows.
 
 ---
 
