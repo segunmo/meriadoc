@@ -42,7 +42,12 @@ pub fn dispatch(cli: Cli, mut app: App) -> Result<(), MeriadocError> {
         Commands::Env { command } => handle_env(command, &app, json),
 
         Commands::Completions { shell } => {
-            generate(shell, &mut Cli::command(), "meriadoc", &mut std::io::stdout());
+            generate(
+                shell,
+                &mut Cli::command(),
+                "meriadoc",
+                &mut std::io::stdout(),
+            );
             Ok(())
         }
 
