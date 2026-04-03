@@ -118,7 +118,11 @@ pub fn handle_doctor(app: &App) -> Result<(), MeriadocError> {
     if app.config.cache.enabled {
         let total: usize = app.caches.values().map(|c| c.len()).sum();
         println!("  [✓] Validation cache enabled");
-        println!("  [i] {} cached entries across {} project(s)", total, app.caches.len());
+        println!(
+            "  [i] {} cached entries across {} project(s)",
+            total,
+            app.caches.len()
+        );
         println!("  [i] Cache base dir: {}", app.config.cache.dir.display());
     } else {
         println!("  [i] Validation cache disabled");

@@ -9,7 +9,7 @@ use crate::config::MeriadocConfig;
 use crate::core::resolver::EntityResolver;
 use crate::core::spec::{JobSpec, ShellSpec, TaskSpec};
 use crate::core::validation::MeriadocError;
-use crate::repo::{project_cache_dir, Project, ProjectDiscovery, ProjectLoader, ValidationCache};
+use crate::repo::{Project, ProjectDiscovery, ProjectLoader, ValidationCache, project_cache_dir};
 
 pub struct App {
     pub config: MeriadocConfig,

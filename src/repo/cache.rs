@@ -354,7 +354,11 @@ mod tests {
         let root = PathBuf::from("/projects/myapp");
         let dir = project_cache_dir(&base, &root);
         let name = dir.file_name().unwrap().to_str().unwrap();
-        assert!(name.starts_with("myapp-"), "slug should start with directory name: {}", name);
+        assert!(
+            name.starts_with("myapp-"),
+            "slug should start with directory name: {}",
+            name
+        );
     }
 
     #[test]
@@ -377,7 +381,10 @@ mod tests {
         let root_b = PathBuf::from("/work/bob/myapp");
         let dir_a = project_cache_dir(&base, &root_a);
         let dir_b = project_cache_dir(&base, &root_b);
-        assert_ne!(dir_a, dir_b, "same project name, different roots must produce different dirs");
+        assert_ne!(
+            dir_a, dir_b,
+            "same project name, different roots must produce different dirs"
+        );
     }
 
     #[test]

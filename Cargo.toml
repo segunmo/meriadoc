@@ -1,6 +1,6 @@
 [package]
 name = "meriadoc"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 authors = ["Segundo Molina Abeniacar <segundo.molina.abeniacar@gmail.com>"]
 description = "A CLI tool for discovering, validating, and running tasks, jobs, and shells defined in project specification files, with built in MCP server capabilities."

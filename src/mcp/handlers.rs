@@ -294,8 +294,8 @@ impl McpHandlers {
 mod tests {
     use super::*;
     use crate::core::spec::{AgentSpec, RiskLevel, SpecFile, TaskSpec};
-    use crate::repo::project::LoadedSpec;
     use crate::repo::Project;
+    use crate::repo::project::LoadedSpec;
     use std::collections::HashMap;
     use std::path::PathBuf;
 

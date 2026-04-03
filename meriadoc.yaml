@@ -48,6 +48,42 @@ tasks:
     cmds:
       - cargo publish --dry-run
 
+  bump-version:
+    description: "Update version in Cargo.toml and Cargo.lock, then commit"
+    agent:
+      enabled: false
+      risk_level: high
+    env:
+      VERSION:
+        type: string
+        required: true
+    cmds:
+      - sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml && rm Cargo.toml.bak
+      - cargo update -p meriadoc
+      - git add Cargo.toml Cargo.lock
+      - git commit -m "Release v${VERSION}"
+
+  publish:
+    description: "Publish crate to crates.io"
+    agent:
+      enabled: false
+      risk_level: high
+    cmds:
+      - cargo publish
+
+  push-release:
+    description: "Push current branch and release tag to origin"
+    agent:
+      enabled: false
+      risk_level: high
+    env:
+      VERSION:
+        type: string
+        required: true
+    cmds:
+      - git push origin HEAD
+      - git push origin v${VERSION}
+
   tag:
     description: "Create an annotated git release tag (push manually to trigger release CI)"
     agent:
@@ -84,6 +120,21 @@ jobs:
       - test
       - build-release
       - publish-dry-run
+
+  release:
+    description: "Full release: CI checks, version bump, tag, push, publish to crates.io"
+    env:
+      VERSION:
+        type: string
+        required: true
+    tasks:
+      - lint
+      - fmt-check
+      - test
+      - bump-version
+      - tag
+      - push-release
+      - publish
 
 shells:
   dev:

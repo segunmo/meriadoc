@@ -11,7 +11,7 @@ use crate::core::execution::{
 use crate::core::resolver::EntityResolver;
 use crate::core::spec::{ConditionSpec, EnvVarSpec};
 use crate::core::validation::MeriadocError;
-use crate::repo::{project_cache_dir, SavedEnvStore, ValidationCache};
+use crate::repo::{SavedEnvStore, ValidationCache, project_cache_dir};
 
 /// Result of environment resolution, including any issues found.
 struct EnvResult {
@@ -339,7 +339,13 @@ impl RunActions {
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
         let project_root = resolved.project.root.clone();
-        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
+        Self::validate_spec_file(
+            &mut app.caches,
+            &app.config.cache,
+            &project_root,
+            &spec_path,
+            &spec_clone,
+        )?;
 
         // 3. Resolve environment (with interactive prompting if enabled, skipped for dry-run)
         let config_dir = app.config_parent_dir().to_path_buf();
@@ -492,7 +498,13 @@ impl RunActions {
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
         let project_root = resolved.project.root.clone();
-        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
+        Self::validate_spec_file(
+            &mut app.caches,
+            &app.config.cache,
+            &project_root,
+            &spec_path,
+            &spec_clone,
+        )?;
 
         // 3. Get spec file dir for special vars
         let spec_file_dir = resolved
@@ -691,7 +703,13 @@ impl RunActions {
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
         let project_root = resolved.project.root.clone();
-        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
+        Self::validate_spec_file(
+            &mut app.caches,
+            &app.config.cache,
+            &project_root,
+            &spec_path,
+            &spec_clone,
+        )?;
 
         // 3. Resolve environment with interactive prompting
         let config_dir = app.config_parent_dir().to_path_buf();
