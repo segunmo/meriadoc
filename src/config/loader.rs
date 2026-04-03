@@ -88,10 +88,7 @@ mod tests {
     #[test]
     fn test_relative_cache_dir_is_replaced_with_absolute() {
         let dir = TempDir::new().unwrap();
-        let path = write_config(
-            &dir,
-            "cache:\n  enabled: true\n  dir: .meriadoc/cache\n",
-        );
+        let path = write_config(&dir, "cache:\n  enabled: true\n  dir: .meriadoc/cache\n");
         let config = ConfigLoader::load(Some(path)).unwrap();
         assert!(
             config.cache.dir.is_absolute(),
