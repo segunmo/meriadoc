@@ -583,11 +583,18 @@ impl RunActions {
                         name: task_name.clone(),
                     })?;
 
-                // Resolve task's env for interpolation display
+                // Resolve task's env for interpolation display.
+                // Pass the already-resolved job env so required vars declared on
+                // tasks but satisfied by the job (e.g. VERSION) don't fail here.
+                let combined_env: Vec<(String, String)> = job_env
+                    .iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .chain(options.env.iter().cloned())
+                    .collect();
                 let task_base_env = EnvResolver::resolve(
                     &task_spec.env,
                     &task_spec.env_files,
-                    &[],
+                    &combined_env,
                     &resolved.project.root,
                 )?;
                 let mut task_env = EnvResolver::merge_job_env(task_base_env, &resolved.spec.env);
@@ -632,11 +639,18 @@ impl RunActions {
                     name: task_name.clone(),
                 })?;
 
-            // Merge task env with job env (job takes precedence)
+            // Merge task env with job env (job takes precedence).
+            // Pass the already-resolved job env so required vars declared on
+            // tasks but satisfied by the job (e.g. VERSION) don't fail here.
+            let combined_env: Vec<(String, String)> = job_env
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .chain(options.env.iter().cloned())
+                .collect();
             let task_base_env = EnvResolver::resolve(
                 &task_spec.env,
                 &task_spec.env_files,
-                &[], // CLI env already in job_env
+                &combined_env,
                 &resolved.project.root,
             )?;
             let merged_env = EnvResolver::merge_job_env(task_base_env, &resolved.spec.env);

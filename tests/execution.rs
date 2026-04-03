@@ -466,6 +466,55 @@ jobs:
 }
 
 #[test]
+fn test_job_cli_env_satisfies_required_task_var() {
+    // Regression test: a required env var declared on a task should be satisfied
+    // by --env passed at the job level, not fail with "missing required env var".
+    let temp_dir = TempDir::new().unwrap();
+
+    create_spec_file(
+        &temp_dir,
+        r#"
+version: v1
+tasks:
+  show_version:
+    cmds:
+      - echo "VERSION=$VERSION"
+    env:
+      VERSION:
+        type: string
+        required: true
+
+jobs:
+  release:
+    env:
+      VERSION:
+        type: string
+        required: true
+    tasks:
+      - show_version
+"#,
+    );
+
+    let config_dir = setup_config(&temp_dir);
+    let output = run_with_config(
+        &temp_dir,
+        &config_dir,
+        &["run", "job", "release", "--env", "VERSION=1.2.3"],
+    );
+
+    assert!(
+        output.status.success(),
+        "Job should succeed when VERSION is passed via --env: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("VERSION=1.2.3"),
+        "Task should receive VERSION from job-level --env"
+    );
+}
+
+#[test]
 fn test_job_on_failure_with_continue() {
     let temp_dir = TempDir::new().unwrap();
 
