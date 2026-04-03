@@ -49,7 +49,7 @@ tasks:
       - cargo publish --dry-run
 
   bump-version:
-    description: "Update version in Cargo.toml and Cargo.lock, then commit"
+    description: "Create a release branch, bump version in Cargo.toml and Cargo.lock, commit"
     agent:
       enabled: false
       risk_level: high
@@ -58,10 +58,39 @@ tasks:
         type: string
         required: true
     cmds:
+      - git checkout -b release/v${VERSION}
       - sed -i.bak "s/^version = \".*\"/version = \"${VERSION}\"/" Cargo.toml && rm Cargo.toml.bak
       - cargo update -p meriadoc
       - git add Cargo.toml Cargo.lock
       - git commit -m "Release v${VERSION}"
+
+  open-release-pr:
+    description: "Push release branch, open PR, merge it, and return to main"
+    agent:
+      enabled: false
+      risk_level: high
+    env:
+      VERSION:
+        type: string
+        required: true
+    cmds:
+      - git push origin release/v${VERSION}
+      - gh pr create --title "Release v${VERSION}" --body "Automated version bump for v${VERSION}" --base main --head release/v${VERSION}
+      - gh pr merge --squash --admin --delete-branch
+      - git checkout main
+      - git pull origin main
+
+  push-tag:
+    description: "Push the release tag to origin (triggers GitHub Actions release CI)"
+    agent:
+      enabled: false
+      risk_level: high
+    env:
+      VERSION:
+        type: string
+        required: true
+    cmds:
+      - git push origin v${VERSION}
 
   publish:
     description: "Publish crate to crates.io"
@@ -71,21 +100,8 @@ tasks:
     cmds:
       - cargo publish
 
-  push-release:
-    description: "Push current branch and release tag to origin"
-    agent:
-      enabled: false
-      risk_level: high
-    env:
-      VERSION:
-        type: string
-        required: true
-    cmds:
-      - git push origin HEAD
-      - git push origin v${VERSION}
-
   tag:
-    description: "Create an annotated git release tag (push manually to trigger release CI)"
+    description: "Create an annotated git release tag"
     agent:
       enabled: false
       risk_level: high
@@ -102,7 +118,6 @@ tasks:
             - echo "Working tree has uncommitted changes — commit everything before tagging."
     cmds:
       - git tag -a v${VERSION} -m "Release v${VERSION}"
-      - 'echo "Tagged v${VERSION} — run: git push origin v${VERSION}"'
 
 jobs:
   ci:
@@ -122,7 +137,7 @@ jobs:
       - publish-dry-run
 
   release:
-    description: "Full release: CI checks, version bump, tag, push, publish to crates.io"
+    description: "Full release: CI checks, version bump PR, tag, publish to crates.io"
     env:
       VERSION:
         type: string
@@ -132,8 +147,9 @@ jobs:
       - fmt-check
       - test
       - bump-version
+      - open-release-pr
       - tag
-      - push-release
+      - push-tag
       - publish
 
 shells:
