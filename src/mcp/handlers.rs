@@ -295,7 +295,7 @@ mod tests {
     use super::*;
     use crate::core::spec::{AgentSpec, RiskLevel, SpecFile, TaskSpec};
     use crate::repo::project::LoadedSpec;
-    use crate::repo::{Project, ValidationCache};
+    use crate::repo::Project;
     use std::collections::HashMap;
     use std::path::PathBuf;
 
@@ -379,7 +379,7 @@ mod tests {
         App {
             projects: vec![project],
             config: crate::config::MeriadocConfig::default(),
-            cache: ValidationCache::new(),
+            caches: std::collections::HashMap::new(),
         }
     }
 

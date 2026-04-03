@@ -2,18 +2,20 @@ pub mod commands;
 pub mod dispatch;
 pub mod output;
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use crate::config::MeriadocConfig;
 use crate::core::resolver::EntityResolver;
 use crate::core::spec::{JobSpec, ShellSpec, TaskSpec};
 use crate::core::validation::MeriadocError;
-use crate::repo::{Project, ProjectDiscovery, ProjectLoader, ValidationCache};
+use crate::repo::{project_cache_dir, Project, ProjectDiscovery, ProjectLoader, ValidationCache};
 
 pub struct App {
     pub config: MeriadocConfig,
     pub projects: Vec<Project>,
-    pub cache: ValidationCache,
+    /// Per-project validation caches, keyed by project root path.
+    pub caches: HashMap<PathBuf, ValidationCache>,
 }
 
 /// Context passed to closures during task iteration.
@@ -39,9 +41,6 @@ pub struct ShellIterItem<'a> {
 
 impl App {
     pub fn new(config: MeriadocConfig) -> Result<Self, MeriadocError> {
-        // Load validation cache
-        let cache = ValidationCache::load(&config.cache.dir)?;
-
         // Discover and load projects from enabled roots
         let mut projects = Vec::new();
         for root in &config.discovery.roots {
@@ -63,14 +62,24 @@ impl App {
             }
         }
 
+        // Load per-project validation caches
+        let mut caches = HashMap::new();
+        if config.cache.enabled {
+            for project in &projects {
+                let cache_dir = project_cache_dir(&config.cache.dir, &project.root);
+                let cache = ValidationCache::load(&cache_dir).unwrap_or_default();
+                caches.insert(project.root.clone(), cache);
+            }
+        }
+
         Ok(Self {
             config,
             projects,
-            cache,
+            caches,
         })
     }
 
-    /// Get the config directory parent (used for saved env storage)
+    /// Get the config directory (used for saved env storage and other user data).
     pub fn config_parent_dir(&self) -> &Path {
         self.config.cache.dir.parent().unwrap_or(Path::new("."))
     }

@@ -69,7 +69,8 @@ impl Default for CacheConfig {
     fn default() -> Self {
         Self {
             enabled: true,
-            dir: PathBuf::from(".meriadoc/cache"),
+            // Sentinel: ConfigLoader replaces this with the absolute path at load time.
+            dir: PathBuf::new(),
         }
     }
 }

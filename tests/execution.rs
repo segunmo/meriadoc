@@ -24,9 +24,12 @@ fn create_spec_file(temp_dir: &TempDir, content: &str) {
     fs::write(&spec_path, content).expect("failed to write spec file");
 }
 
-/// Helper to create a config that points to the temp dir
+/// Helper to create a config that points to the temp dir.
+/// Returns both the config dir and a separate cache dir (both temp) so tests
+/// never write to the real user cache at ~/.config/meriadoc/cache.
 fn setup_config(temp_dir: &TempDir) -> TempDir {
     let config_dir = TempDir::new().expect("failed to create config dir");
+    let cache_dir = config_dir.path().join("cache");
     let config_path = config_dir.path().join("config.yaml");
 
     let config_content = format!(
@@ -40,9 +43,10 @@ fn setup_config(temp_dir: &TempDir) -> TempDir {
     - meriadoc.yaml
 cache:
   enabled: false
-  dir: .meriadoc/cache
+  dir: {}
 "#,
-        temp_dir.path().display()
+        temp_dir.path().display(),
+        cache_dir.display(),
     );
 
     fs::write(&config_path, config_content).expect("failed to write config");

@@ -7,6 +7,29 @@ use sha2::{Digest, Sha256};
 
 use crate::core::validation::MeriadocError;
 
+/// Returns the per-project cache directory for a given project root.
+///
+/// Layout: `<base_cache_dir>/<project-name>-<hash8>/`
+///
+/// The path is canonicalized before hashing so that symlinks and relative
+/// components don't produce different slugs for the same physical directory.
+/// Falls back to the original path if canonicalization fails (e.g. in tests).
+pub fn project_cache_dir(base_cache_dir: &Path, project_root: &Path) -> PathBuf {
+    let canonical = fs::canonicalize(project_root).unwrap_or_else(|_| project_root.to_path_buf());
+
+    let name = canonical
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+
+    let mut hasher = Sha256::new();
+    hasher.update(canonical.to_string_lossy().as_bytes());
+    let hash = format!("{:x}", hasher.finalize());
+    let slug = format!("{}-{}", name, &hash[..8]);
+
+    base_cache_dir.join(slug)
+}
+
 /// Cache entry for a validated spec file
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CacheEntry {
@@ -321,5 +344,58 @@ mod tests {
         assert_eq!(cache.len(), 1); // Only one entry
         let entry = cache.get(&file_path).unwrap();
         assert!(entry.is_valid); // Latest value
+    }
+
+    // ==================== project_cache_dir tests ====================
+
+    #[test]
+    fn test_project_cache_dir_contains_project_name() {
+        let base = PathBuf::from("/cache");
+        let root = PathBuf::from("/projects/myapp");
+        let dir = project_cache_dir(&base, &root);
+        let name = dir.file_name().unwrap().to_str().unwrap();
+        assert!(name.starts_with("myapp-"), "slug should start with directory name: {}", name);
+    }
+
+    #[test]
+    fn test_project_cache_dir_slug_has_hash_suffix() {
+        let base = PathBuf::from("/cache");
+        let root = PathBuf::from("/projects/myapp");
+        let dir = project_cache_dir(&base, &root);
+        let name = dir.file_name().unwrap().to_str().unwrap();
+        // Format is "<name>-<8 hex chars>"
+        let parts: Vec<&str> = name.splitn(2, '-').collect();
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[1].len(), 8);
+        assert!(parts[1].chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_project_cache_dir_same_name_different_roots_get_different_dirs() {
+        let base = PathBuf::from("/cache");
+        let root_a = PathBuf::from("/work/alice/myapp");
+        let root_b = PathBuf::from("/work/bob/myapp");
+        let dir_a = project_cache_dir(&base, &root_a);
+        let dir_b = project_cache_dir(&base, &root_b);
+        assert_ne!(dir_a, dir_b, "same project name, different roots must produce different dirs");
+    }
+
+    #[test]
+    fn test_project_cache_dir_is_deterministic() {
+        let base = PathBuf::from("/cache");
+        let root = PathBuf::from("/projects/myapp");
+        assert_eq!(
+            project_cache_dir(&base, &root),
+            project_cache_dir(&base, &root),
+        );
+    }
+
+    #[test]
+    fn test_project_cache_dir_nested_under_base() {
+        let base = PathBuf::from("/some/cache/base");
+        let root = PathBuf::from("/projects/myapp");
+        let dir = project_cache_dir(&base, &root);
+        assert!(dir.starts_with(&base));
+        assert_eq!(dir.components().count(), base.components().count() + 1);
     }
 }

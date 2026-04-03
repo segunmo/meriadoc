@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::app::App;
 use crate::cli::{CliPrompter, EditableVar, EnvPrompter, InteractiveMode, RunKind, RunOptions};
@@ -11,7 +11,7 @@ use crate::core::execution::{
 use crate::core::resolver::EntityResolver;
 use crate::core::spec::{ConditionSpec, EnvVarSpec};
 use crate::core::validation::MeriadocError;
-use crate::repo::{SavedEnvStore, ValidationCache};
+use crate::repo::{project_cache_dir, SavedEnvStore, ValidationCache};
 
 /// Result of environment resolution, including any issues found.
 struct EnvResult {
@@ -335,10 +335,11 @@ impl RunActions {
         let resolved = EntityResolver::resolve_task(name, &app.projects)?;
         let project_name = EntityResolver::project_name(resolved.project);
 
-        // 2. Validate (with cache) - clone path to avoid borrow issues
+        // 2. Validate (with cache) - clone to avoid borrow conflict with `resolved`
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
-        Self::validate_spec_file(&mut app.cache, &app.config.cache, &spec_path, &spec_clone)?;
+        let project_root = resolved.project.root.clone();
+        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
 
         // 3. Resolve environment (with interactive prompting if enabled, skipped for dry-run)
         let config_dir = app.config_parent_dir().to_path_buf();
@@ -487,10 +488,11 @@ impl RunActions {
         let resolved = EntityResolver::resolve_job(name, &app.projects)?;
         let project_name = EntityResolver::project_name(resolved.project);
 
-        // 2. Validate spec file - clone to avoid borrow issues
+        // 2. Validate spec file - clone to avoid borrow conflict with `resolved`
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
-        Self::validate_spec_file(&mut app.cache, &app.config.cache, &spec_path, &spec_clone)?;
+        let project_root = resolved.project.root.clone();
+        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
 
         // 3. Get spec file dir for special vars
         let spec_file_dir = resolved
@@ -685,10 +687,11 @@ impl RunActions {
         let resolved = EntityResolver::resolve_shell(name, &app.projects)?;
         let project_name = EntityResolver::project_name(resolved.project);
 
-        // 2. Validate spec file - clone to avoid borrow issues
+        // 2. Validate spec file - clone to avoid borrow conflict with `resolved`
         let spec_path = resolved.spec_file.path.clone();
         let spec_clone = resolved.spec_file.spec.clone();
-        Self::validate_spec_file(&mut app.cache, &app.config.cache, &spec_path, &spec_clone)?;
+        let project_root = resolved.project.root.clone();
+        Self::validate_spec_file(&mut app.caches, &app.config.cache, &project_root, &spec_path, &spec_clone)?;
 
         // 3. Resolve environment with interactive prompting
         let config_dir = app.config_parent_dir().to_path_buf();
@@ -806,15 +809,18 @@ impl RunActions {
     }
 
     fn validate_spec_file(
-        cache: &mut ValidationCache,
+        caches: &mut HashMap<PathBuf, ValidationCache>,
         cache_config: &CacheConfig,
+        project_root: &Path,
         spec_path: &Path,
         spec: &crate::core::spec::SpecFile,
     ) -> Result<(), MeriadocError> {
         use crate::core::validation::ProjectValidator;
 
-        // Check cache
-        if cache_config.enabled && !cache.needs_validation(spec_path)? {
+        if cache_config.enabled
+            && let Some(cache) = caches.get(project_root)
+            && !cache.needs_validation(spec_path)?
+        {
             return Ok(()); // Already validated and unchanged
         }
 
@@ -823,10 +829,12 @@ impl RunActions {
         let result = ProjectValidator::validate(&[spec.clone()]);
         let is_valid = result.is_ok();
 
-        // Update cache
+        // Update and persist the per-project cache
         if cache_config.enabled {
+            let cache_dir = project_cache_dir(&cache_config.dir, project_root);
+            let cache = caches.entry(project_root.to_path_buf()).or_default();
             cache.record_validation(spec_path, is_valid)?;
-            cache.save(&cache_config.dir)?;
+            cache.save(&cache_dir)?;
         }
 
         if !is_valid {
